@@ -6,18 +6,13 @@ A Model Context Protocol (MCP) server for managing Linux servers via SSH. This s
 
 ### Docker (Recommended)
 
-1. Clone the repository and navigate to the SSH MCP server directory:
-```bash
-cd /opt/llm-rag-mcp/mcp-servers/ssh-mcp-server
-```
-
-2. Copy the environment file and configure your SSH credentials:
+1. Copy the environment file and configure your SSH credentials:
 ```bash
 cp env.example .env
 # Edit .env with your SSH server details
 ```
 
-3. Build and run with Docker Compose:
+2. Build and run with Docker Compose:
 ```bash
 docker compose up -d
 ```
