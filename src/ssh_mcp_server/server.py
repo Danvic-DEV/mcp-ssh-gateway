@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 import uvicorn
 from starlette.applications import Starlette
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse
 from starlette.routing import Mount, Route
@@ -405,19 +406,23 @@ app = Starlette(
 )
 
 
-@app.middleware("http")
-async def bearer_auth_middleware(request: Request, call_next):
+class BearerAuthMiddleware(BaseHTTPMiddleware):
     """Protect /mcp and /sse with bearer auth when AUTH_TOKEN is configured."""
-    if AUTH_TOKEN and _is_protected_transport_path(request.url.path):
-        auth_header = request.headers.get("authorization", "")
-        if not secrets.compare_digest(auth_header, f"Bearer {AUTH_TOKEN}"):
-            return JSONResponse(
-                {"detail": "Unauthorized"},
-                status_code=401,
-                headers={"WWW-Authenticate": "Bearer"},
-            )
 
-    return await call_next(request)
+    async def dispatch(self, request: Request, call_next):
+        if AUTH_TOKEN and _is_protected_transport_path(request.url.path):
+            auth_header = request.headers.get("authorization", "")
+            if not secrets.compare_digest(auth_header, f"Bearer {AUTH_TOKEN}"):
+                return JSONResponse(
+                    {"detail": "Unauthorized"},
+                    status_code=401,
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+
+        return await call_next(request)
+
+
+app.add_middleware(BearerAuthMiddleware)
 
 
 if __name__ == "__main__":
