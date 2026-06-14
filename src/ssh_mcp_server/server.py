@@ -617,8 +617,9 @@ app = Starlette(
         Mount("/sse", app=mcp.sse_app()),
     ],
     lifespan=lifespan,
-    redirect_slashes=False,
 )
+# Prevent 307 redirects that cause clients to drop Authorization headers.
+app.router.redirect_slashes = False
 
 
 class BearerAuthMiddleware(BaseHTTPMiddleware):
