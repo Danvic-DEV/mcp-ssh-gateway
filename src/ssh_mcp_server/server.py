@@ -60,6 +60,8 @@ def _is_public_oauth_path(path: str) -> bool:
         "/register",
         "/.well-known/oauth-authorization-server",
         "/.well-known/oauth-protected-resource",
+        "/.well-known/oauth-protected-resource/sse",
+        "/.well-known/oauth-protected-resource/mcp",
     }
 
 
@@ -376,6 +378,18 @@ async def oauth_protected_resource_metadata(request: Request) -> JSONResponse:
     return JSONResponse(metadata)
 
 
+async def oauth_transport_protected_resource_metadata(request: Request) -> JSONResponse:
+    """Return RFC 9728 protected resource metadata for a transport-specific path."""
+    base_url = _resolve_base_url(request)
+    transport = request.path_params["transport"]
+    metadata = {
+        "resource": f"{base_url}/{transport}",
+        "authorization_servers": [base_url],
+        "bearer_methods_supported": ["header"],
+    }
+    return JSONResponse(metadata)
+
+
 def _handle_error(error: Exception, operation: str) -> str:
     """Handle and format errors."""
     error_msg = str(error)
@@ -589,6 +603,8 @@ app = Starlette(
     routes=[
         Route("/.well-known/oauth-authorization-server", oauth_authorization_server_metadata, methods=["GET"]),
         Route("/.well-known/oauth-protected-resource", oauth_protected_resource_metadata, methods=["GET"]),
+        Route("/.well-known/oauth-protected-resource/sse", oauth_transport_protected_resource_metadata, methods=["GET"]),
+        Route("/.well-known/oauth-protected-resource/mcp", oauth_transport_protected_resource_metadata, methods=["GET"]),
         Route("/register", register_client, methods=["POST"]),
         Route("/authorize", authorize, methods=["GET"]),
         Route("/oauth/token", oauth_token, methods=["POST"]),
