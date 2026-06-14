@@ -617,6 +617,7 @@ app = Starlette(
         Mount("/sse", app=mcp.sse_app()),
     ],
     lifespan=lifespan,
+    redirect_slashes=False,
 )
 
 
