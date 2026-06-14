@@ -381,7 +381,12 @@ async def oauth_protected_resource_metadata(request: Request) -> JSONResponse:
 async def oauth_transport_protected_resource_metadata(request: Request) -> JSONResponse:
     """Return RFC 9728 protected resource metadata for a transport-specific path."""
     base_url = _resolve_base_url(request)
-    transport = request.path_params["transport"]
+    transport = request.path_params.get("transport")
+
+    if not transport:
+        normalized_path = request.url.path.rstrip("/")
+        transport = normalized_path.rsplit("/", 1)[-1]
+
     metadata = {
         "resource": f"{base_url}/{transport}",
         "authorization_servers": [base_url],
