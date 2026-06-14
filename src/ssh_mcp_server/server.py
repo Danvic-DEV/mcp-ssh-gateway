@@ -34,6 +34,7 @@ DEFAULT_PORT = int(os.environ.get('SSH_PORT', '22'))
 AUTH_TOKEN = os.environ.get('AUTH_TOKEN')
 CLIENT_ID = os.environ.get('CLIENT_ID')
 CLIENT_SECRET = os.environ.get('CLIENT_SECRET')
+SERVER_URL = os.environ.get('SERVER_URL')
 DEFAULT_REDIRECT_URI = "https://claude.ai/api/mcp/auth_callback"
 
 # In-memory store for pending PKCE authorization codes: {code: {..., expires_at}}
@@ -46,6 +47,18 @@ _registered_clients: Dict[str, Dict[str, Any]] = {}
 def _is_protected_transport_path(path: str) -> bool:
     """Return True if request path targets protected MCP transports."""
     return path == "/mcp" or path.startswith("/mcp/") or path == "/sse" or path.startswith("/sse/")
+
+
+def _resolve_base_url(request: Request) -> str:
+    """Resolve server base URL from SERVER_URL or request host with https scheme."""
+    if SERVER_URL:
+        return SERVER_URL.rstrip("/")
+
+    host = request.headers.get("host")
+    if host:
+        return f"https://{host}".rstrip("/")
+
+    return str(request.base_url).rstrip("/")
 
 
 def _purge_expired_codes() -> None:
@@ -273,7 +286,7 @@ async def register_client(request: Request) -> JSONResponse:
 
 async def oauth_authorization_server_metadata(request: Request) -> JSONResponse:
     """Return OAuth 2.0 Authorization Server Metadata."""
-    base_url = str(request.base_url).rstrip("/")
+    base_url = _resolve_base_url(request)
     metadata = {
         "issuer": base_url,
         "authorization_endpoint": f"{base_url}/authorize",
@@ -289,7 +302,7 @@ async def oauth_authorization_server_metadata(request: Request) -> JSONResponse:
 
 async def oauth_protected_resource_metadata(request: Request) -> JSONResponse:
     """Return OAuth 2.0 Protected Resource Metadata (RFC 9728)."""
-    base_url = str(request.base_url).rstrip("/")
+    base_url = _resolve_base_url(request)
     metadata = {
         "resource": base_url,
         "authorization_servers": [base_url],

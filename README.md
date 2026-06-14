@@ -67,6 +67,7 @@ Add the following configuration to your `anythingllm_mcp_servers.json`:
 | `AUTH_TOKEN` | Optional bearer token for MCP HTTP auth | - |
 | `CLIENT_ID` | OAuth client ID for `/oauth/token` | - |
 | `CLIENT_SECRET` | OAuth client secret for `/oauth/token` | - |
+| `SERVER_URL` | Optional external base URL for OAuth metadata endpoints | - |
 | `SERVER_HOST` | MCP server bind address | `0.0.0.0` |
 | `SERVER_PORT` | MCP server port | `8000` |
 
