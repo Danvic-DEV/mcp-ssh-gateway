@@ -6,16 +6,14 @@ A Model Context Protocol (MCP) server for managing Linux servers via SSH. This s
 
 ### Docker (Recommended)
 
-1. Copy the environment file and configure your SSH credentials:
-```bash
-cp env.example .env
-# Edit .env with your SSH server details
-```
-
-2. Build and run with Docker Compose:
+1. Build and run with Docker Compose:
 ```bash
 docker compose up -d
 ```
+
+No `.env` file is required. `SSH_HOST` and `SSH_USER` are defined in `docker-compose.yml` (with defaults), and `SSH_KEY_FILE` defaults to `/app/ssh_keys/id_ed25519`.
+
+On first container start, the entrypoint checks for `/app/ssh_keys/id_ed25519`. If it does not exist, a new ed25519 key pair is generated automatically. The `/app/ssh_keys` folder is mounted as a Docker volume, so the key persists across restarts.
 
 ### Manual Installation
 
@@ -64,7 +62,7 @@ Add the following configuration to your `anythingllm_mcp_servers.json`:
 | `SSH_HOST` | Target server hostname or IP | `localhost` |
 | `SSH_USER` | SSH username | `root` |
 | `SSH_PASSWORD` | SSH password | - |
-| `SSH_KEY_FILE` | Path to SSH private key | - |
+| `SSH_KEY_FILE` | Path to SSH private key | `/app/ssh_keys/id_ed25519` |
 | `SSH_PORT` | SSH port | `22` |
 | `SERVER_HOST` | MCP server bind address | `0.0.0.0` |
 | `SERVER_PORT` | MCP server port | `8000` |
@@ -74,7 +72,7 @@ Add the following configuration to your `anythingllm_mcp_servers.json`:
 The server supports two authentication methods:
 
 1. **Password Authentication**: Set `SSH_PASSWORD` in your environment
-2. **Key-based Authentication**: Set `SSH_KEY_FILE` to the path of your private key
+2. **Key-based Authentication**: By default, Docker uses `/app/ssh_keys/id_ed25519` (auto-generated on first run). You can still override `SSH_KEY_FILE` if needed.
 
 ## Usage
 

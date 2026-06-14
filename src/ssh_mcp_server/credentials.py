@@ -27,7 +27,7 @@ def get_ssh_credentials(hostname: str) -> Optional[SSHCredentials]:
     host = os.environ.get('SSH_HOST', hostname)
     user = os.environ.get('SSH_USER')
     password = os.environ.get('SSH_PASSWORD')
-    key_file = os.environ.get('SSH_KEY_FILE')
+    key_file = os.environ.get('SSH_KEY_FILE', '/app/ssh_keys/id_ed25519')
     port = int(os.environ.get('SSH_PORT', '22'))
     
     if host and user and (password or key_file):
