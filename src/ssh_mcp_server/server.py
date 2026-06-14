@@ -2,6 +2,7 @@
 """SSH MCP Server - Simplified version for testing."""
 
 import base64
+from contextlib import asynccontextmanager
 import hashlib
 import os
 import re
@@ -10,8 +11,10 @@ import time
 from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 import uvicorn
+from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse
+from starlette.routing import Mount, Route
 
 from mcp.server.fastmcp import FastMCP
 from .ssh_client import SSHClient
@@ -35,56 +38,9 @@ CLIENT_SECRET = os.environ.get('CLIENT_SECRET')
 _pending_codes: Dict[str, Dict[str, Any]] = {}
 
 
-class OAuthRouter:
-    """ASGI middleware that:
-    - Passes lifespan/websocket scopes directly to the inner FastMCP app so its
-      task group is properly initialised.
-    - Dispatches GET /authorize and POST /oauth/token without requiring a bearer
-      token (public OAuth endpoints).
-    - Enforces bearer auth on every other HTTP request when AUTH_TOKEN is set.
-    """
-
-    def __init__(self, app, auth_token: Optional[str]):
-        self.app = app
-        self.auth_token = auth_token
-
-    async def __call__(self, scope, receive, send):
-        # Non-HTTP scopes (lifespan, websocket) go straight to FastMCP so that
-        # its anyio task group is initialised before requests arrive.
-        if scope.get("type") != "http":
-            await self.app(scope, receive, send)
-            return
-
-        path = scope.get("path", "")
-        method = scope.get("method", "")
-
-        # ── Public OAuth endpoints ────────────────────────────────────────────
-        if path == "/authorize" and method == "GET":
-            request = Request(scope, receive)
-            response = await authorize(request)
-            await response(scope, receive, send)
-            return
-
-        if path == "/oauth/token" and method == "POST":
-            request = Request(scope, receive)
-            response = await oauth_token(request)
-            await response(scope, receive, send)
-            return
-
-        # ── Bearer auth for all MCP routes ───────────────────────────────────
-        if self.auth_token:
-            headers = dict(scope.get("headers", []))
-            auth_header = headers.get(b"authorization", b"").decode("latin1")
-            if not secrets.compare_digest(auth_header, f"Bearer {self.auth_token}"):
-                response = JSONResponse(
-                    {"detail": "Unauthorized"},
-                    status_code=401,
-                    headers={"WWW-Authenticate": "Bearer"},
-                )
-                await response(scope, receive, send)
-                return
-
-        await self.app(scope, receive, send)
+def _is_protected_transport_path(path: str) -> bool:
+    """Return True if request path targets protected MCP transports."""
+    return path == "/mcp" or path.startswith("/mcp/") or path == "/sse" or path.startswith("/sse/")
 
 
 def _purge_expired_codes() -> None:
@@ -427,9 +383,41 @@ def main():
     uvicorn.run(app, host=host, port=port)
 
 
-# Wrap the FastMCP ASGI app so OAuth routes are public and MCP routes are
-# bearer-protected, while lifespan events reach FastMCP unobstructed.
-app = OAuthRouter(mcp.streamable_http_app(), AUTH_TOKEN)
+@asynccontextmanager
+async def lifespan(_app: Starlette):
+    """Ensure FastMCP session manager is initialised for mounted transports."""
+    async with mcp.session_manager.run():
+        yield
+
+
+# Mount both transports explicitly at required paths.
+mcp.settings.streamable_http_path = "/"
+mcp.settings.sse_path = "/"
+
+app = Starlette(
+    routes=[
+        Route("/authorize", authorize, methods=["GET"]),
+        Route("/oauth/token", oauth_token, methods=["POST"]),
+        Mount("/mcp", app=mcp.streamable_http_app()),
+        Mount("/sse", app=mcp.sse_app()),
+    ],
+    lifespan=lifespan,
+)
+
+
+@app.middleware("http")
+async def bearer_auth_middleware(request: Request, call_next):
+    """Protect /mcp and /sse with bearer auth when AUTH_TOKEN is configured."""
+    if AUTH_TOKEN and _is_protected_transport_path(request.url.path):
+        auth_header = request.headers.get("authorization", "")
+        if not secrets.compare_digest(auth_header, f"Bearer {AUTH_TOKEN}"):
+            return JSONResponse(
+                {"detail": "Unauthorized"},
+                status_code=401,
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+    return await call_next(request)
 
 
 if __name__ == "__main__":
