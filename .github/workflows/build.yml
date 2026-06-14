@@ -37,4 +37,4 @@ jobs:
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ghcr.io/danvic-dev/ssh-mcp-server:main
+          tags: ghcr.io/danvic-dev/mcp-ssh-gateway:main

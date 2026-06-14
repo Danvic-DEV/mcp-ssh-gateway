@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SSH MCP Server - Simplified version for testing."""
+"""mcp-ssh-gateway server."""
 
 import base64
 from contextlib import asynccontextmanager
@@ -24,7 +24,7 @@ from .ssh_client import SSHClient
 load_dotenv()
 
 # Initialize MCP server
-mcp = FastMCP("SSH MCP Server")
+mcp = FastMCP("mcp-ssh-gateway")
 
 # Default server configuration
 DEFAULT_USER = os.environ.get('SSH_USER', 'root')
@@ -488,7 +488,7 @@ def execute_command(command: str, hostname: str, use_sudo: bool = False, sudo_pa
 
 
 def main():
-    """Main function to run the SSH MCP server."""
+    """Main function to run mcp-ssh-gateway."""
     host = os.environ.get("SERVER_HOST", "0.0.0.0")
     port = int(os.environ.get("SERVER_PORT", "8000"))
     uvicorn.run(app, host=host, port=port)

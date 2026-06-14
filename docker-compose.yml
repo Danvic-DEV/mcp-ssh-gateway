@@ -1,9 +1,11 @@
+name: mcp-ssh-gateway
+
 services:
-  ssh-mcp-server:
+  mcp-ssh-gateway:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ssh-mcp-server
+    container_name: mcp-ssh-gateway
     
     # Expose port for HTTP server
     ports:
@@ -26,22 +28,22 @@ services:
 
     # Persist SSH keys across container restarts
     volumes:
-      - ssh_keys:/app/ssh_keys
+      - mcp_ssh_gateway_keys:/app/ssh_keys
 
     # Restart container in case of error
     restart: unless-stopped
     
     # Network connections
     networks:
-      - ssh-mcp-network
+      - mcp-ssh-gateway-network
       - backend
 
 networks:
-  ssh-mcp-network:
+  mcp-ssh-gateway-network:
     driver: bridge
   backend:
     external: true
     name: llm-rag-mcp_backend
 
 volumes:
-  ssh_keys:
+  mcp_ssh_gateway_keys:

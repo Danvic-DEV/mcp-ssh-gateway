@@ -1,4 +1,4 @@
-"""Credential management for SSH MCP server - Docker/Environment version."""
+"""Credential management for mcp-ssh-gateway - Docker/Environment version."""
 
 import os
 from typing import Optional, NamedTuple

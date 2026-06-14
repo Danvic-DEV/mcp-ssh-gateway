@@ -1,1 +1,1 @@
-# SSH MCP Server Package
+# mcp-ssh-gateway package

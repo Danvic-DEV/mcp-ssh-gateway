@@ -1,4 +1,4 @@
-# Dockerfile for SSH MCP Server
+# Dockerfile for mcp-ssh-gateway
 
 # Use a lightweight and stable Python base
 FROM python:3.10-slim

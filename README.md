@@ -1,4 +1,4 @@
-# SSH MCP Server
+# MCP SSH Gateway
 
 A Model Context Protocol (MCP) server for managing Linux servers via SSH. This server provides tools for executing commands, managing files, monitoring services, and analyzing logs on remote Linux systems.
 
@@ -42,10 +42,10 @@ Add the following configuration to your `anythingllm_mcp_servers.json`:
 ```json
 {
   "mcpServers": {
-    "ssh-mcp-server": {
-      "name": "SSH MCP Server",
+    "mcp-ssh-gateway": {
+      "name": "MCP SSH Gateway",
       "type": "streamable",
-      "url": "http://ssh-mcp-server:8000/mcp",
+      "url": "http://mcp-ssh-gateway:8000/mcp",
       "auth_token": null,
       "enabled": true
     }
