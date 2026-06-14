@@ -49,6 +49,28 @@ def _is_protected_transport_path(path: str) -> bool:
     return path == "/mcp" or path.startswith("/mcp/") or path == "/sse" or path.startswith("/sse/")
 
 
+def _issued_access_token() -> str:
+    """Return the access token issued by /oauth/token."""
+    return AUTH_TOKEN or ""
+
+
+def _is_valid_bearer_header(auth_header: str) -> bool:
+    """Validate Authorization header against the issued access token."""
+    issued_token = _issued_access_token()
+    if not issued_token:
+        return False
+
+    parts = auth_header.strip().split(None, 1)
+    if len(parts) != 2:
+        return False
+
+    scheme, token = parts
+    if scheme.lower() != "bearer":
+        return False
+
+    return secrets.compare_digest(token, issued_token)
+
+
 def _resolve_base_url(request: Request) -> str:
     """Resolve server base URL from SERVER_URL or request host with https scheme."""
     if SERVER_URL:
@@ -538,7 +560,7 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         if AUTH_TOKEN and _is_protected_transport_path(request.url.path):
             auth_header = request.headers.get("authorization", "")
-            if not secrets.compare_digest(auth_header, f"Bearer {AUTH_TOKEN}"):
+            if not _is_valid_bearer_header(auth_header):
                 return JSONResponse(
                     {"detail": "Unauthorized"},
                     status_code=401,
