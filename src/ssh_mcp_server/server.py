@@ -49,6 +49,18 @@ def _is_protected_transport_path(path: str) -> bool:
     return path == "/mcp" or path.startswith("/mcp/") or path == "/sse" or path.startswith("/sse/")
 
 
+def _is_public_oauth_path(path: str) -> bool:
+    """Return True for OAuth and well-known endpoints that must stay public."""
+    normalized = path.rstrip("/") or "/"
+    return normalized in {
+        "/authorize",
+        "/oauth/token",
+        "/register",
+        "/.well-known/oauth-authorization-server",
+        "/.well-known/oauth-protected-resource",
+    }
+
+
 def _issued_access_token() -> str:
     """Return the access token issued by /oauth/token."""
     return AUTH_TOKEN or ""
@@ -558,7 +570,13 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
     """Protect /mcp and /sse with bearer auth when AUTH_TOKEN is configured."""
 
     async def dispatch(self, request: Request, call_next):
-        if AUTH_TOKEN and _is_protected_transport_path(request.url.path):
+        path = request.url.path
+
+        # Keep OAuth and discovery endpoints fully public.
+        if _is_public_oauth_path(path):
+            return await call_next(request)
+
+        if AUTH_TOKEN and _is_protected_transport_path(path):
             auth_header = request.headers.get("authorization", "")
             if not _is_valid_bearer_header(auth_header):
                 return JSONResponse(
