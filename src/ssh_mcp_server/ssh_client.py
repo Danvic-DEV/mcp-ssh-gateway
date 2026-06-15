@@ -111,16 +111,12 @@ class SSHClient:
         
         Args:
             command: Command to execute with sudo
-            password: Sudo password (if not provided, uses connection password)
+            password: Unused. Kept for backward compatibility.
             
         Returns:
             Tuple of (exit_code, stdout, stderr)
         """
-        sudo_password = password or self.password
-        if not sudo_password:
-            raise ValueError("Sudo password required")
-        
-        sudo_command = f"echo '{sudo_password}' | sudo -S {command}"
+        sudo_command = f"sudo {command}"
         return self.execute_command(sudo_command)
     
     def get_file_content(self, remote_path: str) -> str:
