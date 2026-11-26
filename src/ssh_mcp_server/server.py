@@ -22,6 +22,7 @@ from mcp.server.fastmcp import FastMCP
 from .ssh_client import SSHClient
 from .hardening import apply_policy, register_read_tools
 from .fixed_tools import register_read_group
+from .change_tools import register_change_group
 
 # Load environment variables
 load_dotenv()
@@ -604,6 +605,7 @@ def _run_fixed_command(hostname: str, command: str):
 # original tools behave exactly as before.
 register_read_tools(mcp, _run_fixed_command, os.environ)
 register_read_group(mcp, _run_fixed_command, os.environ)
+register_change_group(mcp, _run_fixed_command, os.environ)  # never exposed in the readonly profile
 apply_policy(mcp, os.environ, AUTH_TOKEN)
 
 

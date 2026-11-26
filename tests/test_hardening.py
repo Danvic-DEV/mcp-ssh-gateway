@@ -15,7 +15,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "src")
 sys.path.insert(0, SRC)
 
-from ssh_mcp_server import fixed_tools, hardening  # noqa: E402
+from ssh_mcp_server import change_tools, fixed_tools, hardening  # noqa: E402
 
 ORIGINAL_TOOLS = {"test_ssh_connection", "get_server_info", "execute_command"}
 NEW_READ_TOOLS = {
@@ -167,6 +167,7 @@ def build(env, runner=None, auth="tok"):
     runner = runner or FakeRunner()
     hardening.register_read_tools(mcp, runner, env)
     fixed_tools.register_read_group(mcp, runner, env)
+    change_tools.register_change_group(mcp, runner, env)
     hardening.apply_policy(mcp, env, auth)
     return mcp, runner, mcp._tool_manager._tools
 
