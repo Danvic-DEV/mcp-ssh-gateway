@@ -1,0 +1,4 @@
+# Shell scripts must keep LF line endings. With CRLF the Docker entrypoint fails
+# with "exec /entrypoint.sh: no such file or directory" when built from a Windows checkout.
+*.sh text eol=lf
+Dockerfile text eol=lf
