@@ -20,6 +20,7 @@ from starlette.routing import Mount, Route
 
 from mcp.server.fastmcp import FastMCP
 from .ssh_client import SSHClient
+from .hardening import apply_policy, register_read_tools
 
 # Load environment variables
 load_dotenv()
@@ -584,6 +585,24 @@ def execute_command(command: str, hostname: str, use_sudo: bool = False, sudo_pa
             
     except Exception as e:
         return _handle_error(e, f"executing command '{command}'")
+
+
+def _run_fixed_command(hostname: str, command: str):
+    """Run one fixed command (no sudo) for the read-only tools, using the default SSH credentials."""
+    if not DEFAULT_USER or (not DEFAULT_PASSWORD and not DEFAULT_KEY_FILE):
+        return 1, "", "Missing credentials. Please set SSH_USER and SSH_PASSWORD/SSH_KEY_FILE environment variables."
+    try:
+        with SSHClient(hostname, DEFAULT_USER, DEFAULT_PASSWORD, DEFAULT_KEY_FILE, DEFAULT_PORT).connection() as client:
+            return client.execute_command(command)
+    except Exception as e:
+        return 1, "", _handle_error(e, "running a read-only command")
+
+
+# Fixed read-only tools, then the opt-in policy (TOOL_PROFILE, ENABLED_TOOLS,
+# ALLOWED_HOSTS, SCRUB_OUTPUT, REQUIRE_AUTH). With none of those set, the
+# original tools behave exactly as before.
+register_read_tools(mcp, _run_fixed_command)
+apply_policy(mcp, os.environ, AUTH_TOKEN)
 
 
 def main():
