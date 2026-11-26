@@ -233,6 +233,26 @@ The server exposes the following MCP tools:
 - `tail_log`: Tail log files
 - `search_log`: Search log files
 
+## Hardening options (all opt-in)
+
+Nothing below changes behaviour unless the variable is set. With none set, the
+original tools work exactly as before.
+
+| Variable | Effect |
+|---|---|
+| `TOOL_PROFILE=readonly` | Exposes only fixed read-only tools (`get_server_info`, `get_service_status`, `tail_log`, `check_port`, `get_disk_usage`, `list_failed_units`, `list_containers`). `execute_command` and `test_ssh_connection` are not exposed. |
+| `ENABLED_TOOLS=a,b` | Expose only the named tools (intersected with the profile). An unknown name stops startup, so a typo cannot silently hide or expose a tool. |
+| `ALLOWED_HOSTS=h1,h2` | Refuse any tool call for a hostname not in the list. |
+| `SCRUB_OUTPUT=true` | Mask token-like strings (tokens, passwords, private keys, bearer headers, URL credentials) in every tool's output. Best effort. |
+| `REQUIRE_AUTH=true` | Refuse to start unless `AUTH_TOKEN` is set. When `AUTH_TOKEN` is unset the server logs a warning at startup. |
+
+The fixed read-only tools take validated arguments and run one fixed command
+each, with no sudo. The profile limits what the *gateway* offers; the SSH
+account it logs in as should also be restricted (non-sudo, not in the
+`docker` group), because that account is the real boundary.
+
+Run the tests with `python -m unittest discover -s tests`.
+
 ## License
 
 This project is licensed under the MIT License.
