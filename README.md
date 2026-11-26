@@ -230,8 +230,16 @@ The server exposes the following MCP tools:
 - `kill_process`: Kill a process
 - `check_port`: Check port status
 - `get_network_connections`: Get network connections
-- `tail_log`: Tail log files
-- `search_log`: Search log files
+- `tail_log`: Tail log files, or a systemd unit's journal
+- `search_log`: Search log files, or a systemd unit's journal
+- `get_disk_usage`: Show filesystem usage
+- `list_failed_units`: List failed systemd units
+- `list_containers`: List Docker containers (name, image, status)
+
+Tools that change a server (`write_file`, `start_service`, `stop_service`,
+`restart_service`, `kill_process`) need `confirm=True`. See
+[Hardening options](#hardening-options-all-opt-in) for the read-only profile,
+and note that the MCP endpoint is `/mcp/` (with the trailing slash).
 
 ## Hardening options (all opt-in)
 
