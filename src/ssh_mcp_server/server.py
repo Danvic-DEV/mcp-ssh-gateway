@@ -21,6 +21,7 @@ from starlette.routing import Mount, Route
 from mcp.server.fastmcp import FastMCP
 from .ssh_client import SSHClient
 from .hardening import apply_policy, register_read_tools
+from .fixed_tools import register_read_group
 
 # Load environment variables
 load_dotenv()
@@ -601,7 +602,8 @@ def _run_fixed_command(hostname: str, command: str):
 # Fixed read-only tools, then the opt-in policy (TOOL_PROFILE, ENABLED_TOOLS,
 # ALLOWED_HOSTS, SCRUB_OUTPUT, REQUIRE_AUTH). With none of those set, the
 # original tools behave exactly as before.
-register_read_tools(mcp, _run_fixed_command)
+register_read_tools(mcp, _run_fixed_command, os.environ)
+register_read_group(mcp, _run_fixed_command, os.environ)
 apply_policy(mcp, os.environ, AUTH_TOKEN)
 
 

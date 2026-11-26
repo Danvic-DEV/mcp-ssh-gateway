@@ -15,12 +15,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "src")
 sys.path.insert(0, SRC)
 
-from ssh_mcp_server import hardening  # noqa: E402
+from ssh_mcp_server import fixed_tools, hardening  # noqa: E402
 
 ORIGINAL_TOOLS = {"test_ssh_connection", "get_server_info", "execute_command"}
 NEW_READ_TOOLS = {
     "get_service_status", "tail_log", "check_port",
     "get_disk_usage", "list_failed_units", "list_containers",
+    "read_file", "list_directory", "list_processes", "get_network_connections", "search_log",
 }
 
 _PROBE = (
@@ -67,7 +68,23 @@ class Profiles(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         self.assertNotIn("execute_command", names)
         self.assertNotIn("test_ssh_connection", names)
+        # file-path-only tools stay hidden until READ_PATH_ALLOWLIST is set (fail closed)
+        self.assertEqual(names, hardening.READONLY_TOOLS - hardening.PATH_ONLY_TOOLS)
+
+    def test_readonly_with_allowlist_exposes_path_tools(self):
+        names, rc, err = server_tools(TOOL_PROFILE="readonly", READ_PATH_ALLOWLIST="/var/log")
+        self.assertEqual(rc, 0, err)
         self.assertEqual(names, hardening.READONLY_TOOLS)
+
+    def test_readonly_naming_path_tool_without_allowlist_fails_closed(self):
+        _, rc, err = server_tools(TOOL_PROFILE="readonly", ENABLED_TOOLS="read_file")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("READ_PATH_ALLOWLIST", err)
+
+    def test_bad_allowlist_entry_stops_startup(self):
+        _, rc, err = server_tools(READ_PATH_ALLOWLIST="relative/path")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("Invalid path in allowlist", err)
 
     def test_enabled_tools_restricts(self):
         names, rc, err = server_tools(ENABLED_TOOLS="get_server_info,check_port")
@@ -148,7 +165,8 @@ def build(env, runner=None, auth="tok"):
         return "ran"
 
     runner = runner or FakeRunner()
-    hardening.register_read_tools(mcp, runner)
+    hardening.register_read_tools(mcp, runner, env)
+    fixed_tools.register_read_group(mcp, runner, env)
     hardening.apply_policy(mcp, env, auth)
     return mcp, runner, mcp._tool_manager._tools
 
@@ -158,7 +176,7 @@ class ReadTools(unittest.TestCase):
         _, runner, tools = build({})
         for bad in ["ssh; rm -rf /", "a b", "$(id)", "`id`", "x|y", "", "-flag", "a" * 200]:
             self.assertIn("Invalid service name", tools["get_service_status"].fn("h", bad))
-            self.assertIn("Invalid service name", tools["tail_log"].fn("h", bad))
+            self.assertRegex(tools["tail_log"].fn("h", bad), "Invalid service name|exactly one")
         self.assertEqual(runner.calls, [])
 
     def test_commands_are_fixed_and_quoted(self):
