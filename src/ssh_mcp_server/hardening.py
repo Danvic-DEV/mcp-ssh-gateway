@@ -20,6 +20,7 @@ REQUIRE_AUTH      "true" refuses to start unless AUTH_TOKEN is set.
 
 import functools
 import logging
+import posixpath
 import re
 import shlex
 from dataclasses import dataclass
@@ -37,8 +38,17 @@ READONLY_TOOLS = frozenset(
         "get_disk_usage",
         "list_failed_units",
         "list_containers",
+        "read_file",
+        "list_directory",
+        "list_processes",
+        "get_network_connections",
+        "search_log",
     }
 )
+
+# Read-only tools that can only work on file paths. In the readonly profile they
+# are not exposed unless READ_PATH_ALLOWLIST is set (fail closed).
+PATH_ONLY_TOOLS = frozenset({"read_file", "list_directory"})
 
 MAX_OUTPUT_CHARS = 20000
 MAX_LOG_LINES = 500
@@ -122,6 +132,68 @@ def scrub(text: str) -> str:
 # Fixed read-only tools
 # --------------------------------------------------------------------------
 
+# --------------------------------------------------------------------------
+# Path rules (shared by the file-based tools)
+# --------------------------------------------------------------------------
+
+def norm_path(path) -> Optional[str]:
+    """Return a normalised absolute path, or None if the path is not acceptable.
+
+    Rejects relative paths, '..' components, control characters and very long paths.
+    """
+    if not isinstance(path, str) or not path.startswith("/") or len(path) > 1024:
+        return None
+    if any(ord(c) < 32 or ord(c) == 127 for c in path):
+        return None
+    if ".." in path.split("/"):
+        return None
+    return posixpath.normpath(path)
+
+
+def parse_allowlist(value: Optional[str]) -> Optional[Tuple[str, ...]]:
+    """Parse a comma-separated list of absolute path prefixes. None when unset."""
+    items = []
+    for raw in (value or "").split(","):
+        raw = raw.strip()
+        if not raw:
+            continue
+        n = norm_path(raw)
+        if n is None:
+            raise ValueError(f"Invalid path in allowlist: {raw!r}")
+        items.append(n)
+    return tuple(items) if items else None
+
+
+def under_prefixes(path: str, prefixes: Tuple[str, ...]) -> bool:
+    for p in prefixes:
+        if p == "/" or path == p or path.startswith(p.rstrip("/") + "/"):
+            return True
+    return False
+
+
+def check_path(run: "Runner", hostname: str, path, allowlist, *, must_exist: bool = True):
+    """Validate a path against the allowlist.
+
+    Returns (clean_path, None) on success or (None, error_message).
+    With an allowlist, the path is resolved on the server first (following symlinks),
+    so a symlink inside an allowed folder cannot point outside it.
+    With no allowlist, only the basic path rules apply (documented default behaviour).
+    """
+    clean = norm_path(path)
+    if clean is None:
+        return None, "❌ Invalid path: it must be absolute, without '..' or control characters."
+    if allowlist is None:
+        return clean, None
+    flag = "-e" if must_exist else "-m"
+    code, out, _ = run(hostname, f"realpath {flag} -- {shlex.quote(clean)}")
+    resolved = (out or "").strip()
+    if code != 0 or not resolved:
+        return None, "❌ Path not found or not resolvable."
+    if not under_prefixes(resolved, allowlist):
+        return None, "❌ Path is outside the allowed folders for this gateway."
+    return clean, None
+
+
 def _format(hostname: str, label: str, result: Tuple[int, str, str]) -> str:
     code, out, err = result
     text = (out or "").rstrip()
@@ -133,12 +205,22 @@ def _format(hostname: str, label: str, result: Tuple[int, str, str]) -> str:
     return msg
 
 
-def register_read_tools(mcp, run: Runner) -> None:
+def path_policy(env: Optional[Mapping[str, str]]):
+    """Return (read_allowlist, readonly_profile) from the environment."""
+    env = env or {}
+    return (
+        parse_allowlist(env.get("READ_PATH_ALLOWLIST")),
+        (env.get("TOOL_PROFILE") or "full").strip().lower() == "readonly",
+    )
+
+
+def register_read_tools(mcp, run: Runner, env: Optional[Mapping[str, str]] = None) -> None:
     """Register fixed read-only tools. Each runs one fixed command with validated arguments.
 
     `run(hostname, command)` executes a command over SSH and returns (code, stdout, stderr).
     No tool here accepts a free-form command, and none uses sudo.
     """
+    read_allow, readonly = path_policy(env)
 
     def _bad(msg: str) -> str:
         return f"❌ {msg}"
@@ -157,20 +239,33 @@ def register_read_tools(mcp, run: Runner) -> None:
         return _format(hostname, f"Status of {service}", run(hostname, cmd))
 
     @mcp.tool()
-    def tail_log(hostname: str, service: str, lines: int = 100) -> str:
-        """Show the last lines of a systemd unit's journal (read-only).
+    def tail_log(hostname: str, service: str = None, lines: int = 100, path: str = None) -> str:
+        """Show the last lines of a systemd unit's journal, or of a log file (read-only).
+
+        Give exactly one of `service` or `path`.
 
         Args:
             hostname: Server hostname or IP (REQUIRED)
-            service: systemd unit name
+            service: systemd unit name (journal)
             lines: number of lines (1-500, default 100)
+            path: absolute path of a log file (restricted by READ_PATH_ALLOWLIST when set)
         """
-        if not _SERVICE_RE.match(service or ""):
-            return _bad("Invalid service name.")
+        if bool(service) == bool(path):
+            return _bad("Give exactly one of service or path.")
         if not isinstance(lines, int) or not 1 <= lines <= MAX_LOG_LINES:
             return _bad(f"lines must be between 1 and {MAX_LOG_LINES}.")
-        cmd = f"journalctl -u {shlex.quote(service)} -n {lines} --no-pager"
-        return _format(hostname, f"Last {lines} log lines of {service}", run(hostname, cmd))
+        if service:
+            if not _SERVICE_RE.match(service):
+                return _bad("Invalid service name.")
+            cmd = f"journalctl -u {shlex.quote(service)} -n {lines} --no-pager"
+            return _format(hostname, f"Last {lines} log lines of {service}", run(hostname, cmd))
+        if readonly and read_allow is None:
+            return _bad("File paths are disabled in the readonly profile until READ_PATH_ALLOWLIST is set.")
+        clean, err = check_path(run, hostname, path, read_allow)
+        if err:
+            return err
+        cmd = f"tail -n {lines} -- {shlex.quote(clean)}"
+        return _format(hostname, f"Last {lines} lines of {clean}", run(hostname, cmd))
 
     @mcp.tool()
     def check_port(hostname: str, port: int) -> str:
@@ -264,6 +359,16 @@ def apply_policy(mcp, env: Mapping[str, str], auth_token: Optional[str]) -> Poli
         if unknown:
             raise ValueError(f"ENABLED_TOOLS names unknown tools: {', '.join(sorted(unknown))}")
         allowed &= policy.enabled_tools
+
+    read_allow, _ = path_policy(env)  # also validates READ_PATH_ALLOWLIST at startup
+    parse_allowlist(env.get("WRITE_PATH_ALLOWLIST"))
+    if policy.profile == "readonly" and read_allow is None:
+        for name in sorted(PATH_ONLY_TOOLS & set(tools)):
+            if policy.enabled_tools is not None and name in policy.enabled_tools:
+                raise ValueError(f"{name} in the readonly profile needs READ_PATH_ALLOWLIST to be set")
+            if name in allowed:
+                allowed.discard(name)
+                log.warning("%s is not exposed: the readonly profile needs READ_PATH_ALLOWLIST for file paths.", name)
 
     for name in list(tools):
         if name not in allowed:

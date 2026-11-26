@@ -240,9 +240,11 @@ original tools work exactly as before.
 
 | Variable | Effect |
 |---|---|
-| `TOOL_PROFILE=readonly` | Exposes only fixed read-only tools (`get_server_info`, `get_service_status`, `tail_log`, `check_port`, `get_disk_usage`, `list_failed_units`, `list_containers`). `execute_command` and `test_ssh_connection` are not exposed. |
+| `TOOL_PROFILE=readonly` | Exposes only fixed read-only tools (`get_server_info`, `get_service_status`, `tail_log`, `check_port`, `get_disk_usage`, `list_failed_units`, `list_containers`, `list_processes`, `get_network_connections`, `search_log`, and, when `READ_PATH_ALLOWLIST` is set, `read_file` and `list_directory`). `execute_command` and `test_ssh_connection` are not exposed. |
 | `ENABLED_TOOLS=a,b` | Expose only the named tools (intersected with the profile). An unknown name stops startup, so a typo cannot silently hide or expose a tool. |
 | `ALLOWED_HOSTS=h1,h2` | Refuse any tool call for a hostname not in the list. |
+| `READ_PATH_ALLOWLIST=/var/log,/srv/data` | Folders the file-reading tools (`read_file`, `list_directory`, and `tail_log` / `search_log` with `path`) may use. Symlinks are resolved on the server first, so a link cannot point outside. Unset: any absolute path works (the documented default), except in the `readonly` profile, where `read_file` and `list_directory` are not exposed until this is set. |
+| `WRITE_PATH_ALLOWLIST=/srv/app` | Folders `write_file` may write to (symlinks resolved first). Unset: any absolute path the SSH account can write. |
 | `SCRUB_OUTPUT=true` | Mask token-like strings (tokens, passwords, private keys, bearer headers, URL credentials) in every tool's output. Best effort. |
 | `REQUIRE_AUTH=true` | Refuse to start unless `AUTH_TOKEN` is set. When `AUTH_TOKEN` is unset the server logs a warning at startup. |
 
@@ -250,6 +252,14 @@ The fixed read-only tools take validated arguments and run one fixed command
 each, with no sudo. The profile limits what the *gateway* offers; the SSH
 account it logs in as should also be restricted (non-sudo, not in the
 `docker` group), because that account is the real boundary.
+
+The change tools (`write_file`, `start_service`, `stop_service`,
+`restart_service`, `kill_process`) are never exposed in the `readonly` profile.
+Each needs `confirm=True` (without it they only describe what they would do),
+validates its arguments and runs one fixed command. `write_file` copies an
+existing file to `<path>.gwbak.<unix time>` before overwriting it, the service
+and kill tools take only a unit name or a PID, and `use_sudo=True` runs
+through `sudo -n` so it fails instead of waiting for a password.
 
 Run the tests with `python -m unittest discover -s tests`.
 
