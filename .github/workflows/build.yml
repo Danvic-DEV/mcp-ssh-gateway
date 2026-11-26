@@ -37,4 +37,8 @@ jobs:
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ghcr.io/danvic-dev/mcp-ssh-gateway:main
+          # :main keeps working as before; :sha-<commit> is an immutable tag
+          # for deployments that pin images.
+          tags: |
+            ghcr.io/danvic-dev/mcp-ssh-gateway:main
+            ghcr.io/danvic-dev/mcp-ssh-gateway:sha-${{ github.sha }}
